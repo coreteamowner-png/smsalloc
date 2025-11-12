@@ -1,85 +1,150 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <title>SMS Allocator</title>
-  <style>
-    body{font-family:Arial;padding:20px}
-    select, input {padding:6px;margin:6px 0}
-    button{padding:8px 12px;margin-top:8px}
-    pre{background:#f0f0f0;padding:10px}
-  </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SMS Allocator — Powdered By MuDaSiR</title>
+
+  <!-- Google font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <h2>SMS Allocator (Simple)</h2>
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <div class="logo-dot"></div>
+        <div>
+          <div class="brand-name">MuDaSiR</div>
+          <div class="brand-sub">SMS Allocator <span class="vip">VIP</span></div>
+        </div>
+      </div>
 
-  <div>
-    <label>Clients:</label><br/>
-    <select id="clients" size="6" style="width:100%;max-width:600px"></select>
-    <button id="loadRanges">Load Ranges for Selected Client</button>
-  </div>
+      <nav class="main-nav">
+        <button id="menuBtn" class="menu-btn">Menu ☰</button>
+      </nav>
+    </div>
+  </header>
 
-  <div style="margin-top:12px;">
-    <label>Ranges:</label><br/>
-    <select id="ranges" size="6" style="width:100%;max-width:600px"></select>
-  </div>
+  <main>
+    <section class="hero">
+      <div class="overlay"></div>
+      <div class="hero-inner container">
+        <h1>We are a creative group who design <span class="accent">powerful</span> SMS allocations</h1>
+        <p class="lead">Modern, secure and VIP — Powdered by <strong>MuDaSiR</strong>.</p>
 
-  <div style="margin-top:12px;">
-    <label>Quantity per client:</label><br/>
-    <input type="number" id="qty" value="1" min="1" />
-    <button id="allocBtn">Allocate</button>
-  </div>
+        <div class="hero-actions">
+          <button id="startBtn" class="btn primary">Numbers Allocate</button>
+          <a href="#controls" class="btn ghost">More Features</a>
+        </div>
 
-  <div style="margin-top:14px;">
-    <h4>Result / Log</h4>
-    <pre id="log"></pre>
-  </div>
+        <div class="mobile-brand">Powdered By <strong>MuDaSiR</strong></div>
+      </div>
+    </section>
+
+    <section id="controls" class="controls container">
+      <div class="panel">
+        <h3>Select Client</h3>
+        <div class="row">
+          <select id="clients" class="select"></select>
+          <button id="loadRangesBtn" class="btn slim">Load Ranges</button>
+        </div>
+
+        <h3 style="margin-top:18px">Select Range</h3>
+        <div class="row">
+          <select id="ranges" class="select"></select>
+          <input id="qty" type="number" class="input" min="1" value="1" />
+        </div>
+
+        <div class="row action-row">
+          <button id="allocBtn" class="btn primary large">Allocate Now</button>
+          <button id="dryRunBtn" class="btn ghost">Dry Run</button>
+        </div>
+
+        <div class="log" id="log">Log will appear here...</div>
+      </div>
+
+      <aside class="side-panel">
+        <h4>Quick stats</h4>
+        <div id="stats">Select client to view stats</div>
+
+        <h4 style="margin-top:18px">Shortcuts</h4>
+        <ul class="shortcuts">
+          <li><button class="small">Bulk Upload (CSV)</button></li>
+          <li><button class="small">History / Audit</button></li>
+          <li><button class="small">Sync with Upstream</button></li>
+        </ul>
+      </aside>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container foot-inner">
+      <div>© <strong>MuDaSiR</strong> — Powdered Solutions</div>
+      <div class="brandnote">Built VIP • Numbers Allocate</div>
+    </div>
+  </footer>
 
 <script>
+// Minimal JS: fetch clients / ranges / allocate
 async function fetchClients(){
-  const res = await fetch('/api/clients');
-  const data = await res.json();
   const sel = document.getElementById('clients');
-  sel.innerHTML = '';
-  if (data.error) {
-    document.getElementById('log').textContent += 'Error fetching clients: ' + (data.msg||data.error) + '\\n';
-    return;
+  sel.innerHTML = '<option>Loading...</option>';
+  try{
+    const res = await fetch('/api/clients');
+    const data = await res.json();
+    sel.innerHTML = '';
+    if (data.error) { sel.innerHTML = '<option>Error</option>'; document.getElementById('log').textContent += 'Clients error: ' + (data.msg || data.error) + '\\n'; return; }
+    data.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.external_id;
+      opt.text = c.name + ' [' + c.external_id + ']';
+      sel.appendChild(opt);
+    });
+  }catch(e){
+    sel.innerHTML = '<option>Error</option>';
+    document.getElementById('log').textContent += 'Fetch clients failed: ' + e.message + '\\n';
   }
-  data.forEach(c => {
-    const opt = document.createElement('option');
-    opt.value = c.external_id;
-    opt.text = `${c.name} [${c.external_id}]`;
-    sel.appendChild(opt);
-  });
 }
 
-document.getElementById('loadRanges').addEventListener('click', async ()=>{
-  const sel = document.getElementById('clients');
-  const val = sel.value;
-  if(!val){ alert('Select client first'); return; }
-  const res = await fetch(`/api/ranges/${encodeURIComponent(val)}`);
-  const data = await res.json();
-  const rs = document.getElementById('ranges');
-  rs.innerHTML = '';
-  if (data.error) {
-    document.getElementById('log').textContent += 'Error fetching ranges: ' + (data.msg||data.error) + '\\n';
-    return;
+document.getElementById('startBtn').addEventListener('click', ()=> {
+  window.scrollTo({top: document.getElementById('controls').offsetTop - 20, behavior: 'smooth'});
+  fetchClients();
+});
+
+document.getElementById('loadRangesBtn').addEventListener('click', async ()=>{
+  const client = document.getElementById('clients').value;
+  const ranges = document.getElementById('ranges');
+  ranges.innerHTML = '<option>Loading...</option>';
+  if(!client){ alert('Select client first'); return; }
+  try{
+    const res = await fetch('/api/ranges/' + encodeURIComponent(client));
+    const data = await res.json();
+    ranges.innerHTML = '';
+    if (data.error){ document.getElementById('log').textContent += 'Ranges error: ' + (data.msg||data.error) + '\\n'; return; }
+    data.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.selrng;
+      opt.text = r.text + ' (Free:' + r.free + ') ' + (r.allocatable ? '' : '[LOCKED]');
+      ranges.appendChild(opt);
+    });
+    // update stats:
+    const s = document.getElementById('stats');
+    s.innerHTML = '<strong>Ranges loaded:</strong> ' + data.length;
+  }catch(e){
+    ranges.innerHTML = '<option>Error</option>';
+    document.getElementById('log').textContent += 'Fetch ranges failed: ' + e.message + '\\n';
   }
-  data.forEach(r => {
-    const opt = document.createElement('option');
-    opt.value = r.selrng;
-    opt.text = `${r.text} (Free:${r.free}) ${r.allocatable ? '' : '[LOCKED]'}`;
-    rs.appendChild(opt);
-  });
 });
 
 document.getElementById('allocBtn').addEventListener('click', async ()=>{
   const client = document.getElementById('clients').value;
   const range = document.getElementById('ranges').value;
   const qty = parseInt(document.getElementById('qty').value || '0', 10);
-  if(!client || !range || qty <= 0){ alert('Client, Range and positive quantity required'); return; }
   const log = document.getElementById('log');
-  log.textContent += `Allocating ${qty} to ${client} / ${range}...\\n`;
+  if(!client || !range || qty <= 0){ alert('Client, Range and positive quantity required'); return; }
+  log.textContent += `Allocating ${qty} → ${client} / ${range} ...\\n`;
   try {
     const res = await fetch('/api/allocate', {
       method:'POST',
@@ -93,7 +158,17 @@ document.getElementById('allocBtn').addEventListener('click', async ()=>{
   }
 });
 
-window.onload = fetchClients;
+// dry run (no remote post) — visual only
+document.getElementById('dryRunBtn').addEventListener('click', ()=>{
+  const client = document.getElementById('clients').value;
+  const range = document.getElementById('ranges').value;
+  const qty = parseInt(document.getElementById('qty').value || '0', 10);
+  if(!client || !range || qty <= 0){ alert('Client, Range and positive quantity required'); return; }
+  document.getElementById('log').textContent += `DRY RUN: would allocate ${qty} to ${client} / ${range}\\n`;
+});
+
+// load clients on page load (good UX)
+window.addEventListener('load', fetchClients);
 </script>
 
 </body>
