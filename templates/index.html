@@ -5,16 +5,20 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>SMS Allocator — Powdered By MuDaSiR</title>
 
-  <!-- Google font -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
-
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <header class="site-header">
     <div class="container header-inner">
       <div class="brand">
-        <div class="logo-dot"></div>
+        <div class="logo-wrap" aria-hidden="true">
+          <svg class="logo-svg" width="44" height="44" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MuDaSiR">
+            <defs><linearGradient id="g1" x1="0" x2="1"><stop offset="0" stop-color="#64e1b3"/><stop offset="1" stop-color="#8be0ff"/></linearGradient></defs>
+            <rect rx="10" ry="10" width="64" height="64" fill="url(#g1)"/>
+            <text x="50%" y="58%" font-size="34" font-family="Inter, Arial" font-weight="800" text-anchor="middle" fill="#041217">M</text>
+          </svg>
+        </div>
         <div>
           <div class="brand-name">MuDaSiR</div>
           <div class="brand-sub">SMS Allocator <span class="vip">VIP</span></div>
@@ -31,15 +35,14 @@
     <section class="hero">
       <div class="overlay"></div>
       <div class="hero-inner container">
-        <h1>We are a creative group who design <span class="accent">powerful</span> SMS allocations</h1>
-        <p class="lead">Modern, secure and VIP — Powdered by <strong>MuDaSiR</strong>.</p>
+        <h1>We design <span class="accent">VIP</span> SMS allocation flows</h1>
+        <p class="lead">Powdered by <strong>MuDaSiR</strong> — modern, secure and fast.</p>
 
         <div class="hero-actions">
           <button id="startBtn" class="btn primary">Numbers Allocate</button>
           <a href="#controls" class="btn ghost">More Features</a>
         </div>
 
-        <div class="mobile-brand">Powdered By <strong>MuDaSiR</strong></div>
       </div>
     </section>
 
@@ -48,7 +51,7 @@
         <h3>Select Client</h3>
         <div class="row">
           <select id="clients" class="select"></select>
-          <button id="loadRangesBtn" class="btn slim">Load Ranges</button>
+          <button id="loadRangesBtn" class="btn vip-btn">Load Ranges</button>
         </div>
 
         <h3 style="margin-top:18px">Select Range</h3>
@@ -62,19 +65,37 @@
           <button id="dryRunBtn" class="btn ghost">Dry Run</button>
         </div>
 
-        <div class="log" id="log">Log will appear here...</div>
+        <hr style="margin:18px 0;border-color:rgba(255,255,255,0.03)">
+
+        <h3>Bulk CSV Upload</h3>
+        <p style="color:var(--muted);font-size:13px;margin-top:6px">CSV columns: <code>client_external_id,selrng,quantity</code></p>
+        <div class="row">
+          <input id="csvFile" type="file" accept=".csv" />
+          <button id="uploadBtn" class="btn slim">Upload & Run</button>
+        </div>
+        <div id="uploadResult" class="log" style="margin-top:10px">No uploads yet.</div>
+
+        <div class="log" id="log" style="margin-top:12px">Log will appear here...</div>
       </div>
 
       <aside class="side-panel">
-        <h4>Quick stats</h4>
-        <div id="stats">Select client to view stats</div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h4>Allocation History</h4>
+          <button id="refreshHistory" class="small">Refresh</button>
+        </div>
 
-        <h4 style="margin-top:18px">Shortcuts</h4>
-        <ul class="shortcuts">
-          <li><button class="small">Bulk Upload (CSV)</button></li>
-          <li><button class="small">History / Audit</button></li>
-          <li><button class="small">Sync with Upstream</button></li>
-        </ul>
+        <div id="historyWrap" style="margin-top:10px;max-height:420px;overflow:auto">
+          <table id="historyTable" style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="color:var(--muted);font-size:12px"><th style="text-align:left">When</th><th>Client</th><th>Range</th><th>Status</th></tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+
+        <div style="margin-top:18px;color:var(--muted);font-size:13px">
+          <strong>Powdered By</strong> MuDaSiR
+        </div>
       </aside>
     </section>
   </main>
@@ -87,88 +108,93 @@
   </footer>
 
 <script>
-// Minimal JS: fetch clients / ranges / allocate
+// Helpers
+function shortClientName(fullText) { return (fullText||'').split(' [')[0]; }
+
+// Fetch clients
 async function fetchClients(){
-  const sel = document.getElementById('clients');
-  sel.innerHTML = '<option>Loading...</option>';
-  try{
-    const res = await fetch('/api/clients');
-    const data = await res.json();
-    sel.innerHTML = '';
-    if (data.error) { sel.innerHTML = '<option>Error</option>'; document.getElementById('log').textContent += 'Clients error: ' + (data.msg || data.error) + '\\n'; return; }
-    data.forEach(c => {
-      const opt = document.createElement('option');
-      opt.value = c.external_id;
-      opt.text = c.name + ' [' + c.external_id + ']';
-      sel.appendChild(opt);
-    });
-  }catch(e){
-    sel.innerHTML = '<option>Error</option>';
-    document.getElementById('log').textContent += 'Fetch clients failed: ' + e.message + '\\n';
-  }
+  const sel = document.getElementById('clients'); sel.innerHTML = '<option>Loading...</option>';
+  try {
+    const res = await fetch('/api/clients'); const data = await res.json();
+    sel.innerHTML = ''; if (data.error) { sel.innerHTML = '<option>Error</option>'; document.getElementById('log').textContent += 'Clients error: '+(data.msg||data.error)+'\\n'; return; }
+    data.forEach(c => { const opt = document.createElement('option'); opt.value = c.external_id; opt.text = c.name + ' [' + c.external_id + ']'; sel.appendChild(opt); });
+  } catch(e) { sel.innerHTML = '<option>Error</option>'; document.getElementById('log').textContent += 'Fetch clients failed: '+e.message+'\\n'; }
 }
 
-document.getElementById('startBtn').addEventListener('click', ()=> {
-  window.scrollTo({top: document.getElementById('controls').offsetTop - 20, behavior: 'smooth'});
-  fetchClients();
-});
-
+// Load ranges
 document.getElementById('loadRangesBtn').addEventListener('click', async ()=>{
-  const client = document.getElementById('clients').value;
-  const ranges = document.getElementById('ranges');
-  ranges.innerHTML = '<option>Loading...</option>';
-  if(!client){ alert('Select client first'); return; }
+  const selectEl = document.getElementById('clients'); const clientId = selectEl.value; const clientText = selectEl.options[selectEl.selectedIndex]?.text || clientId;
+  const ranges = document.getElementById('ranges'); ranges.innerHTML = '<option>Loading...</option>';
+  if(!clientId){ alert('Select client first'); return; }
   try{
-    const res = await fetch('/api/ranges/' + encodeURIComponent(client));
-    const data = await res.json();
-    ranges.innerHTML = '';
-    if (data.error){ document.getElementById('log').textContent += 'Ranges error: ' + (data.msg||data.error) + '\\n'; return; }
-    data.forEach(r => {
-      const opt = document.createElement('option');
-      opt.value = r.selrng;
-      opt.text = r.text + ' (Free:' + r.free + ') ' + (r.allocatable ? '' : '[LOCKED]');
-      ranges.appendChild(opt);
-    });
-    // update stats:
-    const s = document.getElementById('stats');
-    s.innerHTML = '<strong>Ranges loaded:</strong> ' + data.length;
-  }catch(e){
-    ranges.innerHTML = '<option>Error</option>';
-    document.getElementById('log').textContent += 'Fetch ranges failed: ' + e.message + '\\n';
-  }
+    const res = await fetch('/api/ranges/' + encodeURIComponent(clientId)); const data = await res.json();
+    ranges.innerHTML = ''; if (data.error){ document.getElementById('log').textContent += 'Ranges error: '+(data.msg||data.error)+'\\n'; return; }
+    data.forEach(r => { const opt = document.createElement('option'); opt.value = r.selrng; opt.text = r.text + ' (Free:' + r.free + ') ' + (r.allocatable ? '' : '[LOCKED]'); ranges.appendChild(opt); });
+    document.getElementById('stats').innerHTML = '<strong>Ranges loaded:</strong> ' + data.length + '<br/><small>Client: ' + shortClientName(clientText) + '</small>';
+  }catch(e){ ranges.innerHTML = '<option>Error</option>'; document.getElementById('log').textContent += 'Fetch ranges failed: ' + e.message + '\\n'; }
 });
 
+// Allocate single
 document.getElementById('allocBtn').addEventListener('click', async ()=>{
-  const client = document.getElementById('clients').value;
-  const range = document.getElementById('ranges').value;
-  const qty = parseInt(document.getElementById('qty').value || '0', 10);
-  const log = document.getElementById('log');
-  if(!client || !range || qty <= 0){ alert('Client, Range and positive quantity required'); return; }
-  log.textContent += `Allocating ${qty} → ${client} / ${range} ...\\n`;
+  const clientSel = document.getElementById('clients'); const clientId = clientSel.value; const clientText = clientSel.options[clientSel.selectedIndex]?.text || clientId; const clientShort = shortClientName(clientText);
+  const range = document.getElementById('ranges').value; const qty = parseInt(document.getElementById('qty').value || '0', 10); const log = document.getElementById('log');
+  if(!clientId || !range || qty <= 0){ alert('Client, Range and positive quantity required'); return; }
+  log.textContent += `Allocating ${qty} → ${clientShort} ...\\n`;
   try {
-    const res = await fetch('/api/allocate', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({selidd: client, selrng: range, quantity: qty})
-    });
+    const res = await fetch('/api/allocate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({selidd: clientId, selrng: range, quantity: qty}) });
     const data = await res.json();
-    log.textContent += JSON.stringify(data) + '\\n\\n';
-  } catch(err){
-    log.textContent += 'ERROR: ' + err.message + '\\n\\n';
-  }
+    if (data.status && data.status === 'success') { log.textContent += `${clientShort} — ${range} — Numbers Allocated Successful\\n\\n`; } 
+    else if (data.status && data.status.startsWith('http_')) { log.textContent += `${clientShort} — ${range} — Allocation returned ${data.status}\\n\\n`; } 
+    else if (data.error) { log.textContent += `${clientShort} — ${range} — Allocation Failed: ${data.msg || data.error}\\n\\n`; } 
+    else { log.textContent += `${clientShort} — ${range} — Unexpected response\\n\\n`; }
+    refreshHistory();
+  } catch(err){ log.textContent += `${clientShort} — ${range} — ERROR: ${err.message}\\n\\n`; }
 });
 
-// dry run (no remote post) — visual only
+// Dry run
 document.getElementById('dryRunBtn').addEventListener('click', ()=>{
-  const client = document.getElementById('clients').value;
-  const range = document.getElementById('ranges').value;
-  const qty = parseInt(document.getElementById('qty').value || '0', 10);
-  if(!client || !range || qty <= 0){ alert('Client, Range and positive quantity required'); return; }
-  document.getElementById('log').textContent += `DRY RUN: would allocate ${qty} to ${client} / ${range}\\n`;
+  const clientSel = document.getElementById('clients'); const clientText = clientSel.options[clientSel.selectedIndex]?.text || ''; const clientShort = shortClientName(clientText || 'Client'); const range = document.getElementById('ranges').value; const qty = parseInt(document.getElementById('qty').value || '0', 10);
+  if(!clientShort || !range || qty <= 0){ alert('Client, Range and positive quantity required'); return; }
+  document.getElementById('log').textContent += `DRY RUN: ${clientShort} — ${range} — ${qty} numbers would be allocated\\n`;
 });
 
-// load clients on page load (good UX)
-window.addEventListener('load', fetchClients);
+// CSV upload
+document.getElementById('uploadBtn').addEventListener('click', async ()=>{
+  const fileEl = document.getElementById('csvFile');
+  const display = document.getElementById('uploadResult');
+  if (!fileEl.files || !fileEl.files[0]) { alert('Choose CSV file first'); return; }
+  const file = fileEl.files[0];
+  display.textContent = 'Uploading...';
+  const form = new FormData(); form.append('file', file, file.name);
+  try {
+    const res = await fetch('/api/upload', { method:'POST', body: form });
+    const data = await res.json();
+    if (data.error) { display.textContent = 'Upload error: ' + (data.msg || data.error); return; }
+    let ok = 0, fail = 0, skip = 0;
+    (data.results || []).forEach(r => { if (r.status === 'success') ok++; else if (r.status === 'skipped') skip++; else fail++; });
+    display.textContent = `Processed ${data.processed}: success=${ok}, failed=${fail}, skipped=${skip}`;
+    refreshHistory();
+  } catch(e){ display.textContent = 'Upload failed: ' + e.message; }
+});
+
+// History
+async function refreshHistory(){
+  const res = await fetch('/api/history'); const rows = await res.json();
+  const body = document.getElementById('historyBody'); body.innerHTML = '';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td style="padding:6px 4px;font-size:12px;color:var(--muted)">'+ new Date(r.created_at).toLocaleString() +'</td>'
+                 + '<td style="padding:6px 4px">'+ r.client_external_id +'</td>'
+                 + '<td style="padding:6px 4px">'+ r.range_code +'</td>'
+                 + '<td style="padding:6px 4px">'+ r.status +'</td>';
+    body.appendChild(tr);
+  });
+}
+
+document.getElementById('refreshHistory').addEventListener('click', refreshHistory);
+
+// initial
+window.addEventListener('load', ()=>{ fetchClients(); refreshHistory(); });
 </script>
 
 </body>
